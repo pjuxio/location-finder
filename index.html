@@ -580,6 +580,14 @@ function renderPanel() {
                onkeydown="if(event.key==='Enter') doSearch()" />
         <button onclick="doSearch()">Go</button>
       </div>
+      <div class="btn-row" style="margin-top:6px">
+        <a class="btn btn-neutral" style="font-size:.78rem; text-decoration:none; text-align:center"
+           href="https://www.google.com/search?q=${encodeURIComponent(row.name + ' ' + row.state)}"
+           target="_blank" rel="noopener">🔍 Google</a>
+        <a class="btn btn-neutral" style="font-size:.78rem; text-decoration:none; text-align:center"
+           href="https://en.wikipedia.org/w/index.php?search=${encodeURIComponent(row.name + ' ' + row.state)}"
+           target="_blank" rel="noopener">📖 Wikipedia</a>
+      </div>
       ${row.alias ? `<button class="btn btn-neutral" style="margin-top:6px;width:100%;font-size:.78rem"
           onclick="runGeocode(buildQuery(rows[currentIndex], true))">
           Try alias: &ldquo;${h(row.alias.split(/;| AND /)[0].trim())}&rdquo;
