@@ -43,6 +43,8 @@ Boykin,AL,Gees Bend,32.02311,-87.28901
 
 `source/communities_list.csv` — 652 communities across 32 US states.
 
+`source/demo.csv` — 10-row sample for testing. Includes entries with aliases to exercise all app features.
+
 ## Dependencies
 
 All loaded from CDN, no install needed:
