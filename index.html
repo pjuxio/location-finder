@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Location Finder</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f4f4f5;
+      color: #1c1c1e;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #18181b;
+      color: #fff;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-shrink: 0;
+      z-index: 100;
+    }
+    header h1 { font-size: 1rem; font-weight: 600; white-space: nowrap; }
+    .progress-wrap {
+      flex: 1;
+      background: rgba(255,255,255,.15);
+      border-radius: 4px;
+      height: 6px;
+      min-width: 60px;
+    }
+    .progress-bar {
+      background: #4ade80;
+      height: 100%;
+      border-radius: 4px;
+      width: 0%;
+      transition: width .3s;
+    }
+    #progressText { font-size: .8rem; white-space: nowrap; opacity: .8; }
+
+    /* ── Layout ── */
+    .main {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── Side panel ── */
+    .panel {
+      width: 340px;
+      flex-shrink: 0;
+      background: #fff;
+      border-right: 1px solid #e4e4e7;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    /* ── Map ── */
+    .map-wrap { flex: 1; position: relative; }
+    #map { width: 100%; height: 100%; }
+
+    /* ── Upload screen ── */
+    .upload-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 40px 32px;
+      text-align: center;
+      flex: 1;
+    }
+    .upload-screen svg { color: #a1a1aa; }
+    .upload-screen h2 { font-size: 1.15rem; color: #3f3f46; }
+    .upload-screen p  { font-size: .875rem; color: #71717a; line-height: 1.5; }
+
+    /* ── Community card ── */
+    .community-card {
+      padding: 16px;
+      border-bottom: 1px solid #e4e4e7;
+    }
+    .card-index { font-size: .7rem; color: #a1a1aa; margin-bottom: 4px; }
+    .card-name  { font-size: 1.2rem; font-weight: 700; color: #18181b; }
+    .card-state { font-size: .85rem; color: #71717a; margin-top: 2px; }
+    .card-alias {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: .78rem;
+      color: #6366f1;
+      background: #eef2ff;
+      border-radius: 4px;
+      padding: 2px 8px;
+    }
+    .card-badge {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: .75rem;
+      font-weight: 600;
+      border-radius: 4px;
+      padding: 2px 8px;
+    }
+    .badge-confirmed { background: #dcfce7; color: #166534; }
+    .badge-skipped   { background: #fef9c3; color: #854d0e; }
+
+    /* ── Sections ── */
+    .section {
+      padding: 12px 16px;
+      border-bottom: 1px solid #e4e4e7;
+    }
+    .section-label {
+      font-size: .7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: #a1a1aa;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ── Search ── */
+    .search-row { display: flex; gap: 6px; }
+    .search-row input {
+      flex: 1;
+      padding: 7px 10px;
+      border: 1px solid #d4d4d8;
+      border-radius: 6px;
+      font-size: .875rem;
+      outline: none;
+    }
+    .search-row input:focus { border-color: #6366f1; }
+    .search-row button {
+      padding: 7px 12px;
+      background: #18181b;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .875rem;
+    }
+
+    /* ── Suggestion list ── */
+    .suggestion {
+      padding: 7px 10px;
+      border: 1px solid #e4e4e7;
+      border-radius: 6px;
+      margin-bottom: 5px;
+      cursor: pointer;
+      font-size: .8rem;
+      transition: background .12s, border-color .12s;
+    }
+    .suggestion:hover    { background: #f0f9ff; border-color: #38bdf8; }
+    .suggestion.selected { background: #eff6ff; border-color: #3b82f6; }
+    .suggestion-name   { font-weight: 500; color: #1c1c1e; line-height: 1.3; }
+    .suggestion-coords { color: #a1a1aa; margin-top: 1px; font-variant-numeric: tabular-nums; }
+    .no-results { font-size: .82rem; color: #a1a1aa; }
+
+    /* ── Coords ── */
+    .coords-box {
+      background: #f4f4f5;
+      border-radius: 6px;
+      padding: 8px 12px;
+    }
+    .manual-coords-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .manual-coord-field {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .manual-coord-field label {
+      font-size: .7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: #71717a;
+    }
+    .manual-coord-field input {
+      padding: 5px 8px;
+      border: 1px solid #d4d4d8;
+      border-radius: 5px;
+      font-size: .875rem;
+      font-family: ui-monospace, monospace;
+      background: #fff;
+      outline: none;
+      width: 100%;
+    }
+    .manual-coord-field input:focus { border-color: #6366f1; }
+    .coords-hint { font-size: .72rem; color: #a1a1aa; margin-top: 3px; }
+
+    /* ── Actions ── */
+    .actions { padding: 12px 16px; display: flex; flex-direction: column; gap: 7px; }
+
+    .btn {
+      padding: 9px 14px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .875rem;
+      font-weight: 500;
+      transition: opacity .12s, filter .12s;
+      text-align: center;
+    }
+    .btn:disabled { opacity: .35; cursor: not-allowed; }
+    .btn-confirm  { background: #16a34a; color: #fff; }
+    .btn-confirm:hover:not(:disabled)  { filter: brightness(1.1); }
+    .btn-neutral  { background: #e4e4e7; color: #3f3f46; }
+    .btn-neutral:hover:not(:disabled)  { background: #d4d4d8; }
+    .btn-skip     { background: #fef3c7; color: #92400e; }
+    .btn-skip:hover:not(:disabled)  { background: #fde68a; }
+    .btn-export   { background: #eff6ff; color: #1d4ed8; }
+    .btn-export:hover:not(:disabled) { background: #dbeafe; }
+    .btn-row { display: flex; gap: 6px; }
+    .btn-row .btn { flex: 1; }
+
+    /* ── Footer stats ── */
+    .panel-footer {
+      padding: 10px 16px;
+      border-top: 1px solid #e4e4e7;
+      font-size: .75rem;
+      color: #a1a1aa;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* ── Done screen ── */
+    .done-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 40px 24px;
+      text-align: center;
+      flex: 1;
+    }
+    .done-screen h2 { color: #16a34a; font-size: 1.3rem; }
+    .done-screen p  { color: #71717a; font-size: .875rem; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #18181b;
+      color: #fff;
+      padding: 9px 16px;
+      border-radius: 8px;
+      font-size: .875rem;
+      z-index: 9999;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity .2s, transform .2s;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+
+    /* ── Spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid #d4d4d8;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin .5s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Keyboard hint ── */
+    .kbd {
+      display: inline-block;
+      font-size: .68rem;
+      padding: 1px 5px;
+      background: #e4e4e7;
+      border-radius: 3px;
+      color: #71717a;
+      font-family: ui-monospace, monospace;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Location Finder</h1>
+  <div class="progress-wrap">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+  <span id="progressText">—</span>
+  <button class="btn btn-export" id="headerExportBtn"
+          style="padding:5px 12px; font-size:.8rem;"
+          onclick="exportCSV()">Export CSV</button>
+</header>
+
+<div class="main">
+  <div class="panel" id="panel"></div>
+  <div class="map-wrap">
+    <div id="map"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────
+let csvHeaders = [];
+let rows        = [];       // parsed CSV rows (objects)
+let results     = {};       // { rowIndex: { lat, lon } }
+let skipped     = new Set();
+let currentIndex = -1;
+
+let map, marker;
+let selectedLat = null, selectedLon = null;
+let geocodeResults = [];
+
+const STORAGE_KEY = 'tclp-location-finder-v1';
+
+// ─────────────────────────────────────────────────────────────
+// Map
+// ─────────────────────────────────────────────────────────────
+function initMap() {
+  map = L.map('map').setView([37.8, -96], 4);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }).addTo(map);
+
+  map.on('click', e => setPin(e.latlng.lat, e.latlng.lng));
+}
+
+function setPin(lat, lon) {
+  selectedLat = +lat.toFixed(6);
+  selectedLon = +lon.toFixed(6);
+
+  if (marker) {
+    marker.setLatLng([lat, lon]);
+  } else {
+    marker = L.marker([lat, lon], { draggable: true }).addTo(map);
+    marker.on('dragend', e => {
+      const p = e.target.getLatLng();
+      setPin(p.lat, p.lng);
+    });
+  }
+  updateCoordsDisplay();
+}
+
+function clearPin() {
+  if (marker) { map.removeLayer(marker); marker = null; }
+  selectedLat = null;
+  selectedLon = null;
+}
+
+function updateCoordsDisplay() {
+  const latEl = document.getElementById('inputLat');
+  const lonEl = document.getElementById('inputLon');
+  if (latEl && document.activeElement !== latEl)
+    latEl.value = selectedLat !== null ? selectedLat : '';
+  if (lonEl && document.activeElement !== lonEl)
+    lonEl.value = selectedLon !== null ? selectedLon : '';
+
+  const btn = document.getElementById('confirmBtn');
+  if (btn) btn.disabled = selectedLat === null;
+}
+
+function applyManualCoords() {
+  const lat = parseFloat(document.getElementById('inputLat').value);
+  const lon = parseFloat(document.getElementById('inputLon').value);
+  if (!isNaN(lat) && !isNaN(lon) &&
+      lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+    setPin(lat, lon);
+    map.setView([lat, lon], 14);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// CSV
+// ─────────────────────────────────────────────────────────────
+function parseCSV(text) {
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    .split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+
+  const parseRow = line => {
+    const out = []; let cur = ''; let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+        else inQ = !inQ;
+      } else if (c === ',' && !inQ) { out.push(cur); cur = ''; }
+      else cur += c;
+    }
+    out.push(cur);
+    return out;
+  };
+
+  csvHeaders = parseRow(lines[0]);
+  return lines.slice(1).map(line => {
+    const vals = parseRow(line);
+    const obj = {};
+    csvHeaders.forEach((h, i) => { obj[h] = (vals[i] || '').trim(); });
+    return obj;
+  });
+}
+
+function buildCSV(rows) {
+  const headers = [...csvHeaders];
+  if (!headers.includes('lat')) headers.push('lat');
+  if (!headers.includes('lon')) headers.push('lon');
+
+  const esc = v => {
+    const s = String(v ?? '');
+    return (s.includes(',') || s.includes('"') || s.includes('\n'))
+      ? `"${s.replace(/"/g, '""')}"`
+      : s;
+  };
+
+  const lines = [
+    headers.map(esc).join(','),
+    ...rows.map((row, i) => {
+      const r = results[i];
+      return headers.map(h => {
+        if (h === 'lat') return esc(r ? r.lat : (row.lat || ''));
+        if (h === 'lon') return esc(r ? r.lon : (row.lon || ''));
+        return esc(row[h]);
+      }).join(',');
+    })
+  ];
+  return lines.join('\r\n');
+}
+
+// ─────────────────────────────────────────────────────────────
+// Persistence
+// ─────────────────────────────────────────────────────────────
+function saveProgress() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      results,
+      skipped: [...skipped]
+    }));
+  } catch (_) {}
+}
+
+function loadProgress() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    results = d.results || {};
+    skipped = new Set(d.skipped || []);
+  } catch (_) {
+    results = {}; skipped = new Set();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Navigation
+// ─────────────────────────────────────────────────────────────
+function firstUnprocessed(from = 0) {
+  for (let i = from; i < rows.length; i++) {
+    if (!(i in results) && !skipped.has(i)) return i;
+  }
+  return -1;
+}
+
+function goTo(index) {
+  currentIndex = index;
+  selectedLat = null;
+  selectedLon = null;
+  geocodeResults = [];
+
+  clearPin();
+  renderPanel();
+
+  const existing = results[index];
+  if (existing) {
+    setPin(existing.lat, existing.lon);
+    map.setView([existing.lat, existing.lon], 14);
+  }
+
+  autoGeocode(rows[index]);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Geocoding  (Nominatim — free, no key required)
+// ─────────────────────────────────────────────────────────────
+function buildQuery(row, useAlias = false) {
+  const alias = row.alias ? row.alias.split(/;| AND /)[0].trim() : '';
+  const name  = (useAlias && alias) ? alias : row.name;
+  return `${name}, ${row.state}, USA`;
+}
+
+async function autoGeocode(row) {
+  await runGeocode(buildQuery(row));
+}
+
+async function runGeocode(query) {
+  if (!query.trim()) return;
+  const el = document.getElementById('searchInput');
+  if (el) el.value = query;
+  showSpinner(true);
+
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?' +
+      new URLSearchParams({ q: query, format: 'json', limit: 5, countrycodes: 'us' });
+    const res  = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+    const data = await res.json();
+    geocodeResults = data;
+    renderSuggestions(data);
+
+    // Auto-place pin only if no existing result for this location
+    if (data.length > 0 && !(currentIndex in results)) {
+      const lat = parseFloat(data[0].lat);
+      const lon = parseFloat(data[0].lon);
+      setPin(lat, lon);
+      map.setView([lat, lon], 14);
+      highlightSuggestion(0);
+    }
+  } catch (_) {
+    renderSuggestions([]);
+    showToast('Geocoding request failed — check your connection.');
+  } finally {
+    showSpinner(false);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Rendering
+// ─────────────────────────────────────────────────────────────
+function renderPanel() {
+  const panel = document.getElementById('panel');
+
+  if (rows.length === 0) {
+    renderUpload(panel); return;
+  }
+
+  const anyLeft = firstUnprocessed(0);
+  if (currentIndex === -1 || anyLeft === -1 && !(currentIndex in results) && !skipped.has(currentIndex)) {
+    renderDone(panel); return;
+  }
+
+  const row       = rows[currentIndex];
+  const confirmed = currentIndex in results;
+  const isSkipped = skipped.has(currentIndex);
+  const done      = Object.keys(results).length;
+  const totalDone = done + skipped.size;
+
+  panel.innerHTML = `
+    <div class="community-card">
+      <div class="card-index">#${currentIndex + 1} of ${rows.length}</div>
+      <div class="card-name">${h(row.name)}</div>
+      <div class="card-state">${h(row.state)}</div>
+      ${row.alias ? `<span class="card-alias">Also: ${h(row.alias)}</span>` : ''}
+      ${confirmed ? '<span class="card-badge badge-confirmed">✓ Confirmed</span>' : ''}
+      ${isSkipped  ? '<span class="card-badge badge-skipped">⤸ Skipped</span>'   : ''}
+    </div>
+
+    <div class="section">
+      <div class="section-label">Search</div>
+      <div class="search-row">
+        <input id="searchInput" type="text" placeholder="Search location…"
+               onkeydown="if(event.key==='Enter') doSearch()" />
+        <button onclick="doSearch()">Go</button>
+      </div>
+      ${row.alias ? `<button class="btn btn-neutral" style="margin-top:6px;width:100%;font-size:.78rem"
+          onclick="runGeocode(buildQuery(rows[currentIndex], true))">
+          Try alias: &ldquo;${h(row.alias.split(/;| AND /)[0].trim())}&rdquo;
+        </button>` : ''}
+    </div>
+
+    <div class="section">
+      <div class="section-label">
+        Suggestions
+        <span id="spinner" style="display:none"><span class="spinner"></span></span>
+      </div>
+      <div id="suggestions"><span class="no-results">Searching…</span></div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Coordinates</div>
+      <div class="coords-box">
+        <div class="manual-coords-row">
+          <div class="manual-coord-field">
+            <label for="inputLat">Lat</label>
+            <input id="inputLat" type="number" step="any" placeholder="e.g. 32.3617"
+                   value="${selectedLat !== null ? selectedLat : ''}"
+                   oninput="applyManualCoords()" />
+          </div>
+          <div class="manual-coord-field">
+            <label for="inputLon">Lon</label>
+            <input id="inputLon" type="number" step="any" placeholder="e.g. -86.2975"
+                   value="${selectedLon !== null ? selectedLon : ''}"
+                   oninput="applyManualCoords()" />
+          </div>
+        </div>
+        <div class="coords-hint">Click map &middot; drag pin &middot; or type above &middot; <span class="kbd">Enter</span> to confirm</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-confirm" id="confirmBtn"
+              ${selectedLat === null ? 'disabled' : ''}
+              onclick="confirmLocation()">
+        ✓ Confirm Location
+      </button>
+      <div class="btn-row">
+        <button class="btn btn-neutral" onclick="goBack()">← Back</button>
+        <button class="btn btn-skip"    onclick="skipLocation()">Skip →</button>
+      </div>
+    </div>
+
+    <div class="panel-footer">
+      <span>${totalDone} / ${rows.length} processed (${done} confirmed, ${skipped.size} skipped)</span>
+      <button class="btn btn-export" style="padding:4px 10px; font-size:.75rem" onclick="exportCSV()">Export</button>
+    </div>
+  `;
+
+  updateProgressBar();
+}
+
+function renderUpload(panel) {
+  panel.innerHTML = `
+    <div class="upload-screen">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="12" y1="18" x2="12" y2="12"/>
+        <line x1="9" y1="15" x2="15" y2="15"/>
+      </svg>
+      <h2>Load your CSV</h2>
+      <p>Select the <strong>communities_list.csv</strong> file to begin geocoding.<br/>Your progress is automatically saved in the browser.</p>
+      <label style="cursor:pointer">
+        <input type="file" accept=".csv" onchange="loadFile(this)" style="display:none"/>
+        <span class="btn btn-confirm" style="display:inline-block; padding:10px 28px; font-size:.95rem">
+          Choose CSV file
+        </span>
+      </label>
+      <p style="font-size:.75rem; color:#a1a1aa">Geocoding uses OpenStreetMap Nominatim — no API key needed.</p>
+    </div>
+  `;
+  document.getElementById('progressText').textContent = '—';
+}
+
+function renderDone(panel) {
+  const done = Object.keys(results).length;
+  panel.innerHTML = `
+    <div class="done-screen">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="9 12 11 14 15 10"/>
+      </svg>
+      <h2>All done!</h2>
+      <p>${done} locations confirmed, ${skipped.size} skipped.</p>
+      <button class="btn btn-confirm" style="padding:10px 28px; font-size:.95rem; margin-top:8px"
+              onclick="exportCSV()">⬇ Download CSV</button>
+      ${skipped.size > 0
+        ? `<button class="btn btn-skip" style="padding:8px 20px" onclick="reviewSkipped()">Review ${skipped.size} skipped</button>`
+        : ''}
+    </div>
+  `;
+}
+
+function renderSuggestions(items) {
+  const el = document.getElementById('suggestions');
+  if (!el) return;
+
+  if (!items || items.length === 0) {
+    el.innerHTML = '<span class="no-results">No results — try editing the search above.</span>';
+    return;
+  }
+
+  el.innerHTML = items.map((item, i) => `
+    <div class="suggestion" id="sug-${i}" onclick="pickSuggestion(${i})">
+      <div class="suggestion-name">${h(item.display_name)}</div>
+      <div class="suggestion-coords">${parseFloat(item.lat).toFixed(5)}, ${parseFloat(item.lon).toFixed(5)}</div>
+    </div>
+  `).join('');
+}
+
+function highlightSuggestion(i) {
+  document.querySelectorAll('.suggestion').forEach((el, j) =>
+    el.classList.toggle('selected', j === i));
+}
+
+function showSpinner(on) {
+  const el = document.getElementById('spinner');
+  if (el) el.style.display = on ? 'inline' : 'none';
+}
+
+function updateProgressBar() {
+  const total = rows.length;
+  const done  = Object.keys(results).length + skipped.size;
+  const pct   = total > 0 ? (done / total * 100) : 0;
+  const bar   = document.getElementById('progressBar');
+  const txt   = document.getElementById('progressText');
+  if (bar) bar.style.width = pct + '%';
+  if (txt) txt.textContent = `${done} / ${total}`;
+}
+
+// ─────────────────────────────────────────────────────────────
+// User actions
+// ─────────────────────────────────────────────────────────────
+function pickSuggestion(i) {
+  const item = geocodeResults[i];
+  if (!item) return;
+  const lat = parseFloat(item.lat);
+  const lon = parseFloat(item.lon);
+  setPin(lat, lon);
+  map.setView([lat, lon], 14);
+  highlightSuggestion(i);
+}
+
+function confirmLocation() {
+  if (selectedLat === null) { showToast('Select a location first.'); return; }
+  results[currentIndex] = { lat: selectedLat, lon: selectedLon };
+  skipped.delete(currentIndex);
+  saveProgress();
+  showToast('Location confirmed!');
+  updateProgressBar();
+  advance();
+}
+
+function skipLocation() {
+  skipped.add(currentIndex);
+  if (currentIndex in results) delete results[currentIndex];
+  saveProgress();
+  updateProgressBar();
+  advance();
+}
+
+function advance() {
+  const next = firstUnprocessed(currentIndex + 1);
+  if (next !== -1) { goTo(next); return; }
+  const any  = firstUnprocessed(0);
+  if (any  !== -1) { goTo(any);  return; }
+  currentIndex = -1;
+  renderPanel();
+}
+
+function goBack() {
+  if (currentIndex > 0) goTo(currentIndex - 1);
+}
+
+function reviewSkipped() {
+  const first = [...skipped][0];
+  if (first !== undefined) goTo(first);
+}
+
+function doSearch() {
+  const el = document.getElementById('searchInput');
+  if (el && el.value.trim()) runGeocode(el.value.trim());
+}
+
+// ─────────────────────────────────────────────────────────────
+// File I/O
+// ─────────────────────────────────────────────────────────────
+function loadFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    rows = parseCSV(e.target.result);
+    if (rows.length === 0) { showToast('Could not parse CSV.'); return; }
+
+    loadProgress();
+
+    // Pre-populate from existing lat/lon columns if present
+    rows.forEach((row, i) => {
+      if (!(i in results) && row.lat && row.lon) {
+        const lat = parseFloat(row.lat);
+        const lon = parseFloat(row.lon);
+        if (!isNaN(lat) && !isNaN(lon)) results[i] = { lat, lon };
+      }
+    });
+
+    const first = firstUnprocessed(0);
+    if (first === -1) { currentIndex = -1; renderPanel(); }
+    else goTo(first);
+
+    updateProgressBar();
+  };
+  reader.readAsText(file);
+}
+
+function exportCSV() {
+  if (rows.length === 0) { showToast('No data loaded yet.'); return; }
+  const csv  = buildCSV(rows);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'communities_list_geocoded.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('CSV exported!');
+}
+
+// ─────────────────────────────────────────────────────────────
+// Utilities
+// ─────────────────────────────────────────────────────────────
+function h(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Keyboard shortcuts
+// ─────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (rows.length === 0) return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === 'Enter')       confirmLocation();
+  if (e.key === 'ArrowRight' || e.key === 's') skipLocation();
+  if (e.key === 'ArrowLeft'  || e.key === 'b') goBack();
+});
+
+// ─────────────────────────────────────────────────────────────
+// Boot
+// ─────────────────────────────────────────────────────────────
+initMap();
+renderPanel();
+</script>
+</body>
+</html>
